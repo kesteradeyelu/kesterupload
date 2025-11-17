@@ -6,6 +6,7 @@ import emailRoutes from "./routes/emailRoutes";
 import contactRoutes from "./routes/contactRoutes";
 import uploadRoutes from "./routes/upload.routes";
 import { connectDB } from "./config/db";
+import serverless from "serverless-http";
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.use(emailRoutes);
 app.use(contactRoutes);
 app.use(uploadRoutes);
 
+// error handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
 
@@ -37,7 +39,8 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// ❌ Remove app.listen()
+// ❌ Remove PORT
+
+export const handler = serverless(app);
+export default app;

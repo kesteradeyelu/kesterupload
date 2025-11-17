@@ -76,7 +76,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const apiUrl = "https://kesterwebsiteupload-1.onrender.com";
+  const apiUrl = "http://localhost:4000";
 
   const fetchContacts = async () => {
     try {
