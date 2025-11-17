@@ -1,127 +1,93 @@
-// controllers/media.controller.ts
 import { Request, Response } from "express";
-import cloudinary from "../utils/cloudinary";
+import cloudinary from "cloudinary";
+import dotenv from "dotenv";
 import Media from "../models/media.model";
-import { unlinkSync } from "fs";
 
+dotenv.config();
+
+// Configure cloudinary
+cloudinary.v2.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
+  api_key: process.env.CLOUDINARY_API_KEY!,
+  api_secret: process.env.CLOUDINARY_API_SECRET!,
+});
+
+// UPLOAD MEDIA
 export const uploadMedia = async (req: Request, res: Response) => {
   try {
-    const { title, description, tags, category, problem, solution, link } = req.body;
+    if (!req.files || !(req.files instanceof Array)) {
+      return res.status(400).json({ message: "No images uploaded" });
+    }
+
     const files = req.files as Express.Multer.File[];
 
-    if (!files || files.length === 0) {
-      return res.status(400).json({ message: "No images uploaded." });
-    }
-
-    // ✅ Fix tag formatting
-    let formattedTags: string[] = [];
-    if (typeof tags === "string") {
-      formattedTags = tags.split(",").map((tag: string) => tag.trim());
-    } else if (Array.isArray(tags)) {
-      formattedTags = tags;
-    }
-
-    const uploadResults = await Promise.all(
-      files.map((file) => cloudinary.uploader.upload(file.path, { folder: "media-uploads" }))
+    // Upload each image to cloudinary
+    const imageUrls = await Promise.all(
+      files.map(async (file) => {
+        const uploaded = await cloudinary.v2.uploader.upload(file.path, {
+          folder: "kester_uploads",
+        });
+        return uploaded.secure_url;
+      })
     );
-    const imageUrls = uploadResults.map((result) => result.secure_url);
 
-    const newMedia = await Media.create({
-      title,
-      description,
-      tags: formattedTags,
-      category,
-      problem,
-      solution,
-      link,
+    const media = await Media.create({
+      title: req.body.title,
+      description: req.body.description,
+      tags: req.body.tags ? req.body.tags.split(",") : [],
+      category: req.body.category,
       images: imageUrls,
+      problem: req.body.problem,
+      solution: req.body.solution,
+      link: req.body.link,
     });
 
-    res.status(201).json({ message: "Upload successful!", data: newMedia });
-
+    return res.status(201).json(media);
   } catch (error: any) {
-    console.error("UPLOAD ERROR:", error.message); // ✅ log actual reason
-    res.status(500).json({ message: "Server Error", error: error.message });
+    console.error("UPLOAD ERROR:", error);
+    return res.status(500).json({
+      message: "Upload failed",
+      error: error.message || error,
+    });
   }
 };
 
-
-// ✅ GET SINGLE UPLOAD
+// GET SINGLE UPLOAD
 export const getSingleUpload = async (req: Request, res: Response) => {
   try {
     const upload = await Media.findById(req.params.id);
-    if (!upload) {
-      return res.status(404).json({ message: "Upload not found." });
-    }
-    res.json({ data: upload });
-  } catch (error) {
-    res.status(500).json({ message: "Error fetching upload.", error });
-  }
-};
-
-// ✅ DELETE UPLOAD
-export const deleteUpload = async (req: Request, res: Response) => {
-  try {
-    const upload = await Media.findByIdAndDelete(req.params.id);
     if (!upload) return res.status(404).json({ message: "Upload not found" });
-
-    // Optional: delete Cloudinary images here using public_id if stored
-    res.json({ message: "Upload deleted", data: upload });
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+    res.json(upload);
+  } catch (error: any) {
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// ✅ EDIT UPLOAD
+// EDIT UPLOAD
 export const editUpload = async (req: Request, res: Response) => {
   try {
-    const { title, description, category, problem, solution, link, tags } = req.body;
-    const existingImages = req.body.existingImages || [];
-    const parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
-
-    let allImages: string[] = [];
-
-    // Add retained existing images
-    if (typeof existingImages === "string") {
-      allImages = [existingImages];
-    } else if (Array.isArray(existingImages)) {
-      allImages = [...existingImages];
-    }
-
-    // Upload new images to Cloudinary
-    const files = req.files as Express.Multer.File[];
-    if (files && files.length > 0) {
-      const uploadResults = await Promise.all(
-        files.map((file) =>
-          cloudinary.uploader.upload(file.path, { folder: "media-uploads" })
-        )
-      );
-      const newUrls = uploadResults.map((res) => res.secure_url);
-      allImages.push(...newUrls);
-    }
-
-    const updated = await Media.findByIdAndUpdate(
+    const upload = await Media.findByIdAndUpdate(
       req.params.id,
-      {
-        title,
-        description,
-        category,
-        tags: parsedTags,
-        problem,
-        solution,
-        link,
-        images: allImages,
-      },
+      req.body,
       { new: true }
     );
 
-    if (!updated) {
-      return res.status(404).json({ message: "Upload not found" });
-    }
+    if (!upload) return res.status(404).json({ message: "Upload not found" });
 
-    res.json({ message: "Upload updated", updated });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to update upload", error });
+    res.json(upload);
+  } catch (error: any) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// DELETE UPLOAD
+export const deleteUpload = async (req: Request, res: Response) => {
+  try {
+    const deleted = await Media.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: "Upload not found" });
+
+    res.json({ message: "Upload deleted" });
+  } catch (error: any) {
+    return res.status(500).json({ message: error.message });
   }
 };
